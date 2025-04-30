@@ -18,34 +18,16 @@ const usb = microzig.core.usb;
 
 const pins = pin_config.pins();
 
-// var uart_writer: ?rp2xxx.uart.UART.Writer = null;
-//
-// pub fn uartLogFn(
-//     comptime level: std.log.Level,
-//     comptime scope: @TypeOf(.EnumLiteral),
-//     comptime format: []const u8,
-//     args: anytype,
-// ) void {
-//     _ = level;
-//     _ = scope;
-//
-//     if (uart_writer) |writer| {
-//         writer.print( format, args) catch {};
-//     }
-// }
-
-// Set std.log go to uart
+// Set std.log to go to uart
 pub const microzig_options = microzig.Options {
     .log_level = .debug,
     .logFn = hal.uart.logFn,
-    // .logFn = uartLogFn,
 };
 
 pub fn main() !void {
     pin_config.apply();
 
     _ = uart_log.init();
-    // uart_writer = uart_log.init();
 
     std.log.debug("Starting pinball controller!\r\n", .{});
 
@@ -85,11 +67,13 @@ pub fn main() !void {
     var report_buf: [7]u8 = .{ 0, 0, 0, 0, 0, 0, 1 << 7 };
 
     while (true) {
+        // LED blinking to indicate running loop
         if (time.get_time_since_boot().diff(blinky_prev).to_us() > 500_000) {
             pins.led.toggle();
             blinky_prev = time.get_time_since_boot();
         }
 
+        // Poll test button
         switch (button.poll() catch continue) {
             .pressed => {
                 // std.log.debug("Pressed", .{});
@@ -102,6 +86,7 @@ pub fn main() !void {
             .idle => {}
         }
 
+        // Log all other USB interrupts except BuffStatus
         const ints = usb_dev.callbacks.get_interrupts();
         const int_fields = comptime @typeInfo(microzig.core.usb.InterruptStatus).@"struct".fields;
 
@@ -111,6 +96,7 @@ pub fn main() !void {
             }
         }
 
+        // Process pending USB housekeeping
         usb_dev.task(false) catch unreachable;
 
         const time_now = time.get_time_since_boot();
