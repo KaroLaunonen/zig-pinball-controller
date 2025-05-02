@@ -64,7 +64,6 @@ pub fn main() !void {
     usb_if.init(usb_dev);
 
     var joy_old = time.get_time_since_boot();
-    var report_buf: [7]u8 = .{ 0, 0, 0, 0, 0, 0, 1 << 7 };
 
     while (true) {
         // LED blinking to indicate running loop
@@ -102,11 +101,8 @@ pub fn main() !void {
         const time_now = time.get_time_since_boot();
         if (time_now.diff(joy_old).to_us() > 10_000) {
             const acc = try accel_gyro.read_raw_acceleration();
-            std.mem.writeInt(i16, report_buf[0..2], acc[0], .big);
-            std.mem.writeInt(i16, report_buf[2..4], acc[1], .big);
-            std.mem.writeInt(i16, report_buf[4..6], acc[2], .big);
 
-            usb_if.send_joystick_report(usb_dev, hal.usb.Endpoint.to_address(1, .In), report_buf[0..]);
+            try usb_if.send_joystick_report(usb_dev, acc);
             joy_old = time_now;
         }
 

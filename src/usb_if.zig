@@ -8,50 +8,76 @@ const gpio = rp2xxx.gpio;
 const clocks = rp2xxx.clocks;
 const usb = rp2xxx.usb;
 
-const DUMP_DESCRIPTORS = true;
-
-// HID
 const hid = usb.hid;
-const hid_usage = usb.hid.hid_usage;
-const hid_usage_page = usb.hid.hid_usage_page;
-const hid_usage_min = usb.hid.hid_usage_min;
-const hid_collection = usb.hid.hid_collection;
-const hid_collection_end = usb.hid.hid_collection_end;
-const hid_logical_min = usb.hid.hid_logical_min;
-const hid_logical_max = usb.hid.hid_logical_max;
-const hid_physical_min = usb.hid.hid_physical_min;
-const hid_physical_max = usb.hid.hid_physical_max;
-const hid_report_id = usb.hid.hid_report_id;
-const hid_report_size = usb.hid.hid_report_size;
-const hid_report_count = usb.hid.hid_report_count;
-const hid_input = usb.hid.hid_input;
-const UsageTable = usb.hid.UsageTable;
-const CollectionItem = usb.hid.CollectionItem;
 
-const ReportDescriptorPinballController = hid_usage_page(1, UsageTable.desktop) //
-    ++ hid_usage(1, "\x04".*) //
-    ++ hid_collection(CollectionItem.Application) //
-    ++ hid_collection(CollectionItem.Logical)   // Usage Data In
+const HID_KeymodifierCodes = enum(u8) {
+    left_control    = 0xe0,
+    left_shift,
+    left_alt,
+    left_option,
+    left_gui,
+    right_control,
+    right_shift,
+    right_alt,
+    right_gui
+};
 
-    ++ hid_logical_min(2, "\x00\x80".*) // -32767
-    ++ hid_logical_max(2, "\xff\x7f".*) // 32767
-    ++ hid_report_size(1, "\x10".*)     // 16 bits
-    ++ hid_report_count(1, "\x03".*)    // 3 reports
-    ++ hid_usage(1, "\x30".*)           // X axis
-    ++ hid_usage(1, "\x31".*)           // Y axis
-    ++ hid_usage(1, "\x32".*)           // Z axis
-    ++ hid_input(hid.HID_DATA | hid.HID_VARIABLE | hid.HID_ABSOLUTE | hid.HID_WRAP_NO | hid.HID_LINEAR | hid.HID_PREFERRED_STATE | hid.HID_NO_NULL_POSITION) //
+const HID_Report_IDs = enum(u8) {
+    reserved    = 0x00,     // can't use report id 0
+    joystick    = 0x01,
+    keyboard,
+    leds
+};
+
+const ReportDescriptorPinballController = hid.hid_usage_page(1, hid.UsageTable.desktop)
+    ++ hid.hid_usage(1, hid.DesktopUsage.joystick)
+    ++ hid.hid_collection(hid.CollectionItem.Application) // Application collection
+    ++ hid.hid_collection(hid.CollectionItem.Logical)   // Logical collection
+
+    ++ hid.hid_report_id(1, .{ @intFromEnum(HID_Report_IDs.joystick)} )
+    ++ hid.hid_logical_min(2, "\x00\x80".*)     // -32767
+    ++ hid.hid_logical_max(2, "\xff\x7f".*)     // 32767
+    ++ hid.hid_report_size(1, "\x10".*)         // 16 bits
+    ++ hid.hid_report_count(1, "\x03".*)        // 3 reports
+    ++ hid.hid_usage(1, hid.DesktopUsage.x_axis)    // X axis
+    ++ hid.hid_usage(1, hid.DesktopUsage.y_axis)    // Y axis
+    ++ hid.hid_usage(1, hid.DesktopUsage.z_axis)    // Z axis
+    ++ hid.hid_input(hid.HID_DATA | hid.HID_VARIABLE | hid.HID_ABSOLUTE | hid.HID_WRAP_NO | hid.HID_LINEAR | hid.HID_PREFERRED_STATE | hid.HID_NO_NULL_POSITION) //
                                                                                                                                                              //
-    ++ hid_usage_page(1, UsageTable.button)     // Have to have a button, otherwise won't be interpreted as a joystick
-    ++ hid_usage(1, "\x01".*)           // Usage Buttons
-    ++ hid_report_size(1, "\x01".*)     // 1 bit
-    ++ hid_report_count(1, "\x01".*)    // 1 report
-    ++ hid_input(hid.HID_DATA | hid.HID_VARIABLE | hid.HID_ABSOLUTE)
-    ++ hid_report_count(1, "\x07".*)    // 7 bits padding
-    ++ hid_input(hid.HID_CONSTANT | hid.HID_VARIABLE | hid.HID_ABSOLUTE)
+    ++ hid.hid_usage_page(1, hid.UsageTable.button)     // Have to have a button, otherwise won't be interpreted as a joystick
+    ++ hid.hid_usage(1, "\x01".*)           // Usage Buttons
+    ++ hid.hid_report_size(1, "\x01".*)     // 1 bit
+    ++ hid.hid_report_count(1, "\x01".*)    // 1 report
+    ++ hid.hid_input(hid.HID_DATA | hid.HID_VARIABLE | hid.HID_ABSOLUTE)
+    ++ hid.hid_report_count(1, "\x07".*)    // 7 bits padding
+    ++ hid.hid_input(hid.HID_CONSTANT | hid.HID_VARIABLE | hid.HID_ABSOLUTE)
     // End
-    ++ hid_collection_end()
-    ++ hid_collection_end();
+    ++ hid.hid_collection_end()
+    ++ hid.hid_collection_end()
+
+    // Keyboard HID
+    ++ hid.hid_usage_page(1, hid.UsageTable.keyboard)
+    ++ hid.hid_usage(1, hid.DesktopUsage.keyboard)
+    ++ hid.hid_collection(hid.CollectionItem.Application)
+    ++ hid.hid_report_id(1, .{ @intFromEnum(HID_Report_IDs.keyboard)} )
+    ++ hid.hid_usage_page(1, hid.UsageTable.keyboard)
+    ++ hid.hid_usage_min(1, .{ @intFromEnum(HID_KeymodifierCodes.left_alt) })
+    ++ hid.hid_usage_max(1, .{ @intFromEnum(HID_KeymodifierCodes.right_shift) })
+    ++ hid.hid_logical_min(1, "\x00".*)
+    ++ hid.hid_logical_max(1, "\x01".*)
+    ++ hid.hid_report_size(1, "\x01".*)
+    ++ hid.hid_report_count(1, "\x08".*)
+    ++ hid.hid_input(hid.HID_DATA | hid.HID_VARIABLE | hid.HID_ABSOLUTE)
+    ++ hid.hid_report_count(1, "\x06".*)
+    ++ hid.hid_report_size(1, "\x08".*)
+    ++ hid.hid_logical_max(1, "\x65".*)
+    ++ hid.hid_usage_min(1, "\x00".*)
+    ++ hid.hid_usage_max(1, "\x65".*)
+    ++ hid.hid_input(hid.HID_DATA | hid.HID_ARRAY | hid.HID_ABSOLUTE)
+    ++ hid.hid_collection_end();
+
+var reportBuf: [8]u8 = @splat(0);
+const epAddr = rp2xxx.usb.Endpoint.to_address(1, .In);
 
 const usb_packet_size = 8;
 const usb_config_len = usb.templates.config_descriptor_len + usb.templates.hid_in_descriptor_len;
@@ -101,9 +127,8 @@ pub fn init(usb_dev: type) void {
     // Then initialize the USB device using the configuration defined above
     usb_dev.init_device(&DEVICE_CONFIGURATION) catch unreachable;
 
-    // Initialize endpoint for joystick
-    const ep_addr = rp2xxx.usb.Endpoint.to_address(1, .In);
-    usb_dev.callbacks.endpoint_open(ep_addr, 64, usb.types.TransferType.Interrupt);
+    // Initialize endpoint for HID device
+    usb_dev.callbacks.endpoint_open(epAddr, 64, usb.types.TransferType.Interrupt);
 
     while (!usb_dev.device_ready()) {
         usb_dev.task(false) catch unreachable;
@@ -111,6 +136,12 @@ pub fn init(usb_dev: type) void {
     std.log.debug("USB configured", .{});
 }
 
-pub fn send_joystick_report(usb_dev: type, endpoint_addr: u8, data: []const u8) void {
-    usb_dev.callbacks.usb_start_tx(endpoint_addr, data);
+pub fn send_joystick_report(usb_dev: type, axis_values: [3]i16) !void {
+    reportBuf[0] = @intFromEnum(HID_Report_IDs.joystick);
+    std.mem.writeInt(i16, reportBuf[1..3], axis_values[0], .big);
+    std.mem.writeInt(i16, reportBuf[3..5], axis_values[1], .big);
+    std.mem.writeInt(i16, reportBuf[5..7], axis_values[2], .big);
+    reportBuf[7] = 0;
+
+    usb_dev.callbacks.usb_start_tx(epAddr, &reportBuf);
 }
