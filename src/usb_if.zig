@@ -86,7 +86,7 @@ const usb_config_descriptor =
     usb.templates.hid_in_descriptor(0, 0, 0,
         ReportDescriptorPinballController.len,
         usb.Endpoint.to_address(1, .In),
-        usb_packet_size, 10);
+        usb_packet_size, 2);
 
 var driver_hid = usb.hid.HidClassDriver{ .report_descriptor = &ReportDescriptorPinballController };
 var drivers = [_]usb.types.UsbClassDriver{ driver_hid.driver() };
@@ -128,7 +128,7 @@ pub fn init(usb_dev: type) void {
     usb_dev.init_device(&DEVICE_CONFIGURATION) catch unreachable;
 
     // Initialize endpoint for HID device
-    usb_dev.callbacks.endpoint_open(epAddr, 64, usb.types.TransferType.Interrupt);
+    usb_dev.callbacks.endpoint_open(epAddr, 512, usb.types.TransferType.Interrupt);
 
     while (!usb_dev.device_ready()) {
         usb_dev.task(false) catch unreachable;
@@ -136,12 +136,26 @@ pub fn init(usb_dev: type) void {
     std.log.debug("USB configured", .{});
 }
 
-pub fn send_joystick_report(usb_dev: type, axis_values: [3]i16) !void {
+pub fn send_joystick_report(usb_dev: type, axis_values: [3]i16) void {
     reportBuf[0] = @intFromEnum(HID_Report_IDs.joystick);
     std.mem.writeInt(i16, reportBuf[1..3], axis_values[0], .big);
     std.mem.writeInt(i16, reportBuf[3..5], axis_values[1], .big);
     std.mem.writeInt(i16, reportBuf[5..7], axis_values[2], .big);
     reportBuf[7] = 0;
+
+    usb_dev.callbacks.usb_start_tx(epAddr, &reportBuf);
+}
+
+pub fn send_keyboard_report(usb_dev: type, keycodes: []const u8) void {
+    reportBuf = @splat(0);
+    reportBuf[0] = @intFromEnum(HID_Report_IDs.keyboard);
+    for (keycodes, 2..) |keycode, index| {
+        if (index == 8) {
+            std.log.warn("keybuf overflow", .{});
+            break;
+        }
+        reportBuf[index] = keycode;
+    }
 
     usb_dev.callbacks.usb_start_tx(epAddr, &reportBuf);
 }

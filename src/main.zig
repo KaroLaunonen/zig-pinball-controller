@@ -35,6 +35,7 @@ pub fn main() !void {
 
     const flipper_button_input = microzig.drivers.input.Debounced_Button(.{
         .active_state = .low,
+        .filter_depth = 8
     });
 
     var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
@@ -64,6 +65,7 @@ pub fn main() !void {
     usb_if.init(usb_dev);
 
     var joy_old = time.get_time_since_boot();
+    var key_old = time.get_time_since_boot();
 
     while (true) {
         // LED blinking to indicate running loop
@@ -72,40 +74,44 @@ pub fn main() !void {
             blinky_prev = time.get_time_since_boot();
         }
 
+        const time_now = time.get_time_since_boot();
+
         // Poll test button
-        switch (button.poll() catch continue) {
-            .pressed => {
-                // std.log.debug("Pressed", .{});
-                pins.led_1.put(1);
-            },
-            .released => {
-                // std.log.debug("Released", .{});
-                pins.led_1.put(0);
-            },
-            .idle => {}
-        }
-
-        // Log all other USB interrupts except BuffStatus
-        const ints = usb_dev.callbacks.get_interrupts();
-        const int_fields = comptime @typeInfo(microzig.core.usb.InterruptStatus).@"struct".fields;
-
-        inline for (int_fields) |field| {
-            if (@field(ints, field.name) == true and !std.mem.eql(u8, field.name, "BuffStatus")) {
-                std.log.debug("#### {s}", .{ field.name });
+        if (time_now.diff(key_old).to_us() > 1_000) {
+            switch (button.poll() catch continue) {
+                .pressed => {
+                    std.log.debug("Pressed", .{});
+                    pins.led_1.put(1);
+                    var keycodes: [6]u8 = @splat(0);
+                    keycodes[0] = 4; // 'a'
+                    usb_if.send_keyboard_report(usb_dev, &keycodes);
+                    usb_dev.task(true) catch unreachable;
+                },
+                .released => {
+                    std.log.debug("Released", .{});
+                    pins.led_1.put(0);
+                    const keycodes: [6]u8 = @splat(0);
+                    usb_if.send_keyboard_report(usb_dev, &keycodes);
+                    usb_dev.task(true) catch unreachable;
+                },
+                .idle => {}
             }
+
+            key_old = time_now;
         }
 
         // Process pending USB housekeeping
         usb_dev.task(false) catch unreachable;
 
-        const time_now = time.get_time_since_boot();
         if (time_now.diff(joy_old).to_us() > 10_000) {
             const acc = try accel_gyro.read_raw_acceleration();
 
-            try usb_if.send_joystick_report(usb_dev, acc);
+            usb_if.send_joystick_report(usb_dev, acc);
             joy_old = time_now;
+
+            usb_dev.task(false) catch unreachable;
         }
 
-        time.sleep_ms(3);
+        time.sleep_us(500);
     }
 }
