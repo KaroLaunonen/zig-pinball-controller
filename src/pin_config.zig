@@ -6,6 +6,7 @@ pub const pin_config = rp2xxx.pins.GlobalConfiguration{
     .GPIO25 = .{
         .name = "led",
         .direction = .out,
+        .function = .PWM4_B
     },
     .GPIO0 = .{
         .function = .UART0_TX
