@@ -138,10 +138,10 @@ pub fn init(usb_dev: type) void {
 
 pub fn send_joystick_report(usb_dev: type, axis_values: [3]i16) void {
     reportBuf[0] = @intFromEnum(HID_Report_IDs.joystick);
-    std.mem.writeInt(i16, reportBuf[1..3], axis_values[0], .big);
-    std.mem.writeInt(i16, reportBuf[3..5], axis_values[1], .big);
-    std.mem.writeInt(i16, reportBuf[5..7], axis_values[2], .big);
-    reportBuf[7] = 0;
+    std.mem.writeInt(i16, reportBuf[1..3], axis_values[0], .little);
+    std.mem.writeInt(i16, reportBuf[3..5], axis_values[1], .little);
+    std.mem.writeInt(i16, reportBuf[5..7], axis_values[2], .little);
+    reportBuf[7] = 0; // Mandatory button
 
     usb_dev.callbacks.usb_start_tx(epAddr, &reportBuf);
 }
