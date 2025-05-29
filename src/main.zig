@@ -124,6 +124,9 @@ pub fn main() !void {
             if (elapsed_us < 5000) {
                 time.sleep_ms(@as(u32, @intCast(@divTrunc(5000 - elapsed_us, 1000))));
             }
+
+            // Keep USB rolling
+            usb_dev.task(false) catch unreachable;
         }
 
         std.log.info("stabilization done", .{});
@@ -143,20 +146,15 @@ pub fn main() !void {
         const time_now = time.get_time_since_boot();
 
         // Poll test button
-        if (time_now.diff(key_old).to_us() > 1_000) {
+        if (time_now.diff(key_old).to_us() > 10_000) {
             switch (button.poll() catch continue) {
-                .pressed => {
-                    std.log.debug("Pressed", .{});
-                    pins.led_1.put(1);
+                .pressed, .released => |event| {
+                    std.log.debug("{s}", .{ @tagName(event) });
+                    pins.led_1.put(if (event == .pressed) 1 else 0);
                     var keycodes: [6]u8 = @splat(0);
-                    keycodes[0] = 4; // 'a'
-                    usb_if.send_keyboard_report(usb_dev, &keycodes);
-                    usb_dev.task(true) catch unreachable;
-                },
-                .released => {
-                    std.log.debug("Released", .{});
-                    pins.led_1.put(0);
-                    const keycodes: [6]u8 = @splat(0);
+
+                    if (event == .pressed) keycodes[0] = 4; // 'a'
+
                     usb_if.send_keyboard_report(usb_dev, &keycodes);
                     usb_dev.task(true) catch unreachable;
                 },
@@ -180,7 +178,7 @@ pub fn main() !void {
                 // Don't report repeating values
                 if (prev_acc[0] != acc[0] or prev_acc[1] != acc[1] or prev_acc[2] != acc[2]) {
 
-                    if (!nudged and dist > 200.0) {
+                    if (!nudged and dist > 400.0) {
                         nudged = true;
                         std.log.debug("nudge!", .{});
                         pins.led.set_level(100);
@@ -189,8 +187,6 @@ pub fn main() !void {
                     prev_acc = acc;
                     usb_if.send_joystick_report(usb_dev, acc);
                     joy_old = time_now;
-
-                    usb_dev.task(false) catch unreachable;
                 }
 
                 if (nudged and dist < 50.0) {
@@ -224,9 +220,23 @@ pub fn main() !void {
 
         ringbuf_index += 1;
 
+        // if (!keyboard_event_sent and accel_event_fifo.readableLength() > 0) {
+        //     if (accel_event_fifo.readableLength() > 1) {
+        //         const fifo_len = accel_event_fifo.readableLength();
+        //         std.log.debug("accel fifo: {d} / 10", .{ fifo_len });
+        //     }
+        //     const maybe_accel = accel_event_fifo.readItem();
+        //     if (maybe_accel) |accel| {
+        //         usb_if.send_joystick_report(usb_dev, accel);
+        //     }
+        // }
+
+        // Process pending USB housekeeping
+        usb_dev.task(true) catch unreachable;
+
         const elapsed_time = time.get_time_since_boot().diff(time_start).to_us();
-        if (elapsed_time < 2_000) {
-            time.sleep_us(2_000 - elapsed_time);
+        if (elapsed_time < 1_000) {
+            time.sleep_us(1_000 - elapsed_time);
         }
     }
 }
