@@ -13,15 +13,13 @@ const time = hal.time;
 
 const i2c0 = hal.i2c.instance.I2C0;
 
-const ssd1306 = microzig.drivers.display.SSD1306_I2C;
-
 const usb_dev = hal.usb.Usb(.{});
 const usb = microzig.core.usb;
 
 const pins = pin_config.pins();
 
 // Set std.log to go to uart
-pub const microzig_options = microzig.Options {
+pub const microzig_options = microzig.Options{
     .log_level = .info,
     .logFn = hal.uart.logFn,
 };
@@ -41,7 +39,7 @@ pub fn main() !void {
 
     const flipper_button_input = microzig.drivers.input.Debounced_Button(.{
         .active_state = .low,
-        .filter_depth = 4
+        .filter_depth = 4,
     });
 
     var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
@@ -50,13 +48,8 @@ pub fn main() !void {
     // Set up I2C
     try i2c0.apply(.{
         .clock_config = hal.clock_config,
-        .baud_rate = 400_000
+        .baud_rate = 400_000,
     });
-
-    // var display_device = rp2xxx.drivers.I2C_Device.init(i2c0, rp2xxx.i2c.Address.new(0x3c));
-    // const display = try microzig.drivers.display.SSD1306_I2C.init(display_device.datagram_device());
-    // try display.clear_screen(true);
-    // var framebuffer = microzig.drivers.display.ssd1306.Framebuffer.init(.black);
 
     std.log.info("init lsm6ds33\r\n", .{});
     var accel_gyro_device = hal.drivers.I2C_Device.init(microzig.hal.i2c.instance.I2C0, microzig.hal.i2c.Address.new(0x6a));
@@ -78,7 +71,7 @@ pub fn main() !void {
 
     const STABILIZATION_RUN = 100;
 
-    var accel_ringbuf: [STABILIZATION_RUN]acceleration = @as([1]acceleration, .{ .{ 0, 0, 0}}) ** STABILIZATION_RUN;
+    var accel_ringbuf: [STABILIZATION_RUN]acceleration = @as([1]acceleration, .{.{ 0, 0, 0 }}) ** STABILIZATION_RUN;
     var ringbuf_index: u32 = 0;
     var time_start = time.get_time_since_boot();
     var prev_accel_avg: acceleration = @splat(0);
@@ -130,7 +123,6 @@ pub fn main() !void {
         }
 
         std.log.info("stabilization done", .{});
-
     }
 
     var prev_acc: acceleration = stable_baseline;
@@ -149,7 +141,7 @@ pub fn main() !void {
         if (time_now.diff(key_old).to_us() > 10_000) {
             switch (button.poll() catch continue) {
                 .pressed, .released => |event| {
-                    std.log.debug("{s}", .{ @tagName(event) });
+                    std.log.debug("{s}", .{@tagName(event)});
                     pins.led_1.put(if (event == .pressed) 1 else 0);
                     var keycodes: [6]u8 = @splat(0);
 
@@ -158,7 +150,7 @@ pub fn main() !void {
                     usb_if.send_keyboard_report(usb_dev, &keycodes);
                     usb_dev.task(true) catch unreachable;
                 },
-                .idle => {}
+                .idle => {},
             }
 
             key_old = time_now;
@@ -177,7 +169,6 @@ pub fn main() !void {
             if ((!nudged and dist > 200.0) or nudged) {
                 // Don't report repeating values
                 if (prev_acc[0] != acc[0] or prev_acc[1] != acc[1] or prev_acc[2] != acc[2]) {
-
                     if (!nudged and dist > 400.0) {
                         nudged = true;
                         std.log.debug("nudge!", .{});
@@ -219,17 +210,6 @@ pub fn main() !void {
         }
 
         ringbuf_index += 1;
-
-        // if (!keyboard_event_sent and accel_event_fifo.readableLength() > 0) {
-        //     if (accel_event_fifo.readableLength() > 1) {
-        //         const fifo_len = accel_event_fifo.readableLength();
-        //         std.log.debug("accel fifo: {d} / 10", .{ fifo_len });
-        //     }
-        //     const maybe_accel = accel_event_fifo.readItem();
-        //     if (maybe_accel) |accel| {
-        //         usb_if.send_joystick_report(usb_dev, accel);
-        //     }
-        // }
 
         // Process pending USB housekeeping
         usb_dev.task(true) catch unreachable;
