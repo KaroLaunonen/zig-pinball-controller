@@ -1,8 +1,8 @@
 # Raspberry Pi Pico Pinball Controller
 
-A Raspberry Pi Pico-based pinball controller for use with Visual Pinball X that uses MicroZig and the Raspberry Pi Pico
-HAL for USB HID communication, as well as I2C and GPIO input/output. The main goal of this project is to provide a
-customizable and extensible pinball controller using Zig programming language.
+A Raspberry Pi Pico-based pinball controller for use with Visual Pinball X that uses MicroZig
+and the Raspberry Pi Pico's USB HID, as well as I2C and GPIO input/output. The main goal of this
+project is to provide a customizable and extensible pinball controller using Zig programming language.
 
 Note, this project is for personal need and for learning Zig and MicroZig. After coding this for a while I found a
 proper Pinball controller project for Pico. Check out [Pinscape Pico](https://github.com/mjrgh/PinscapePico) for a
