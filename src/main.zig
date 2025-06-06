@@ -22,6 +22,10 @@ const LSM6DS33 = drivers.sensor.LSM6DS33;
 
 const pins = pin_config.pins();
 
+const Acceleration = accel_math.Acceleration;
+const AccelerationRingbuf = accel_math.AccelerationRingbuf;
+const ACCELERATION_RINGBUF_LEN = accel_math.ACCELERATION_RINGBUF_LEN;
+
 // Set std.log to go to uart
 pub const microzig_options = microzig.Options{
     .log_level = .info,
@@ -44,7 +48,7 @@ pub fn main() !void {
     pins.led.slice().set_wrap(100);
     pins.led.slice().enable();
 
-    var blinky_prev = time.get_time_since_boot();
+    // var blinky_prev = time.get_time_since_boot();
 
     // const flipper_button_input = microzig.drivers.input.Debounced_Button(.{
     //     .active_state = .low,
@@ -76,77 +80,32 @@ pub fn main() !void {
         std.log.info("done init lsm6ds33\r\n", .{});
     }
 
-    std.log.info("usb init", .{});
-    usb_if.init(usb_dev);
-
     var joy_old = time.get_time_since_boot();
     // var key_old = time.get_time_since_boot();
 
-    var stable_baseline: acceleration = undefined;
+    var stable_baseline: Acceleration = undefined;
 
-    const STABILIZATION_RUN = 100;
-
-    var accel_ringbuf: [STABILIZATION_RUN]acceleration = @as([1]acceleration, .{.{ 0, 0, 0 }}) ** STABILIZATION_RUN;
+    var accel_ringbuf: AccelerationRingbuf = @as([1]Acceleration, .{.{ 0, 0, 0 }}) ** ACCELERATION_RINGBUF_LEN;
     var ringbuf_index: u32 = 0;
     var time_start = time.get_time_since_boot();
-    var prev_accel_avg: acceleration = @splat(0);
-
-    var led_on = false;
+    var prev_accel_avg: Acceleration = @splat(0);
 
     if (accel_gyro_maybe) |accel_gyro|
     // Get stable acceleration baseline
     {
-        var stable = false;
-        std.log.info("start stabilization", .{});
-
-        while (!stable) {
-            // LED blinking to indicate running loop
-            if (time.get_time_since_boot().diff(blinky_prev).to_us() > 500_000) {
-                pins.led.set_level(if (led_on) 100 else 0);
-                led_on = !led_on;
-
-                blinky_prev = time.get_time_since_boot();
-            }
-
-            time_start = time.get_time_since_boot();
-            accel_ringbuf[ringbuf_index % STABILIZATION_RUN] = try accel_gyro.read_raw_acceleration();
-            if (ringbuf_index > 0 and ringbuf_index % STABILIZATION_RUN == 0) {
-                // Have enough data, calculate average
-                // Calculate average
-                const accel_avg = accel_math.calculate_accel_ringbuf_avg(accel_ringbuf[0..]);
-
-                const distance = accel_math.accel_distance(prev_accel_avg, accel_avg);
-
-                prev_accel_avg = accel_avg;
-                std.log.debug("avg: {any} distance prev: {d:5.1}", .{ accel_avg, distance });
-
-                if (distance < 100.0) {
-                    stable = true;
-                    stable_baseline = accel_avg;
-                }
-            }
-
-            ringbuf_index += 1;
-
-            const elapsed_us = time.get_time_since_boot().diff(time_start).to_us();
-
-            if (elapsed_us < 5000) {
-                time.sleep_ms(@as(u32, @intCast(@divTrunc(5000 - elapsed_us, 1000))));
-            }
-
-            // Keep USB rolling
-            usb_dev.task(false) catch unreachable;
-        }
-
+        try accel_math.get_stable_baseline(&accel_gyro, pins.led, &accel_ringbuf, &stable_baseline);
         std.log.info("stabilization done", .{});
     } else {
         std.log.info("Skipping stabilization loop", .{});
     }
 
-    var prev_acc: acceleration = stable_baseline;
+    var prev_acc: Acceleration = stable_baseline;
     ringbuf_index = 0;
     var stabilization_round: u8 = 10;
     var nudged = false;
+
+    std.log.info("usb init", .{});
+    usb_if.init(usb_dev);
 
     pins.led.set_level(20);
 
@@ -208,8 +167,8 @@ pub fn main() !void {
                 }
             }
 
-            accel_ringbuf[ringbuf_index % STABILIZATION_RUN] = acc;
-            if (ringbuf_index > 0 and ringbuf_index % STABILIZATION_RUN == 0) {
+            accel_ringbuf[ringbuf_index % ACCELERATION_RINGBUF_LEN] = acc;
+            if (ringbuf_index > 0 and ringbuf_index % ACCELERATION_RINGBUF_LEN == 0) {
                 // Enough samples to check for stable position
                 const accel_avg = accel_math.calculate_accel_ringbuf_avg(accel_ringbuf[0..]);
 
