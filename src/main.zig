@@ -16,12 +16,15 @@ const i2c0 = hal.i2c.instance.I2C0;
 const usb_dev = hal.usb.Usb(.{});
 const usb = microzig.core.usb;
 
+const drivers = microzig.drivers;
+const LSM6DS33 = drivers.sensor.LSM6DS33;
+
 const pins = pin_config.pins();
 
 // Set std.log to go to uart
 pub const microzig_options = microzig.Options{
     .log_level = .info,
-    .logFn = hal.uart.logFn,
+    .logFn = hal.uart.log,
 };
 
 pub fn main() !void {
@@ -52,16 +55,20 @@ pub fn main() !void {
     });
 
     std.log.info("init lsm6ds33\r\n", .{});
-    var accel_gyro_device = hal.drivers.I2C_Device.init(microzig.hal.i2c.instance.I2C0, microzig.hal.i2c.Address.new(0x6a));
-    var accel_gyro = try microzig.drivers.sensor.LSM6DS33.init(accel_gyro_device.datagram_device(), true);
+    var accel_gyro_device = hal.drivers.I2C_Device.init(microzig.hal.i2c.instance.I2C0, microzig.hal.i2c.Address.new(0x6a), drivers.time.Duration.from_ms(200));
 
-    try accel_gyro.reset();
-    try accel_gyro.set_high_performance_mode(.enabled);
-    try accel_gyro.set_output_data_rate(.hz_104);
-    try accel_gyro.set_accelerator_full_scale(.fs_4g);
-    try accel_gyro.set_anti_aliasing_filter_bandwidth(.fb_50hz);
-    std.log.info("done init lsm6ds33\r\n", .{});
+    const accel_gyro_maybe: ?LSM6DS33 = LSM6DS33.init(accel_gyro_device.datagram_device(), true) catch null;
 
+    if (accel_gyro_maybe) |accel_gyro| {
+        try accel_gyro.reset();
+        try accel_gyro.set_high_performance_mode(.enabled);
+        try accel_gyro.set_output_data_rate(.hz_104);
+        try accel_gyro.set_accelerator_full_scale(.fs_4g);
+        try accel_gyro.set_anti_aliasing_filter_bandwidth(.fb_50hz);
+        std.log.info("done init lsm6ds33\r\n", .{});
+    }
+
+    std.log.info("usb init", .{});
     usb_if.init(usb_dev);
 
     var joy_old = time.get_time_since_boot();
@@ -78,6 +85,7 @@ pub fn main() !void {
 
     var led_on = false;
 
+    if (accel_gyro_maybe) |accel_gyro|
     // Get stable acceleration baseline
     {
         var stable = false;
@@ -123,6 +131,8 @@ pub fn main() !void {
         }
 
         std.log.info("stabilization done", .{});
+    } else {
+        std.log.info("Skipping stabilization loop", .{});
     }
 
     var prev_acc: acceleration = stable_baseline;
@@ -131,6 +141,8 @@ pub fn main() !void {
     var nudged = false;
 
     pins.led.set_level(20);
+
+    std.log.info("start main loop", .{});
 
     while (true) {
         time_start = time.get_time_since_boot();
@@ -159,60 +171,59 @@ pub fn main() !void {
         // Process pending USB housekeeping
         usb_dev.task(false) catch unreachable;
 
-        const acc = try accel_gyro.read_raw_acceleration();
+        if (accel_gyro_maybe) |accel_gyro| {
+            const acc = try accel_gyro.read_raw_acceleration();
 
-        // If at least 10ms has passed since last report
-        if (time_now.diff(joy_old).to_us() > 10_000) {
-            const dist = accel_math.accel_distance(acc, stable_baseline);
+            // If at least 10ms has passed since last report
+            if (time_now.diff(joy_old).to_us() > 10_000) {
+                const dist = accel_math.accel_distance(acc, stable_baseline);
 
-            // If we were nudged and not returned to stable position, keep on reporting
-            if ((!nudged and dist > 200.0) or nudged) {
-                // Don't report repeating values
-                if (prev_acc[0] != acc[0] or prev_acc[1] != acc[1] or prev_acc[2] != acc[2]) {
-                    if (!nudged and dist > 400.0) {
-                        nudged = true;
-                        std.log.debug("nudge!", .{});
-                        pins.led.set_level(100);
+                // If we were nudged and not returned to stable position, keep on reporting
+                if ((!nudged and dist > 200.0) or nudged) {
+                    // Don't report repeating values
+                    if (prev_acc[0] != acc[0] or prev_acc[1] != acc[1] or prev_acc[2] != acc[2]) {
+                        if (!nudged and dist > 400.0) {
+                            nudged = true;
+                            std.log.debug("nudge!", .{});
+                            pins.led.set_level(100);
+                        }
+
+                        prev_acc = acc;
+                        usb_if.send_joystick_report(usb_dev, acc);
+                        joy_old = time_now;
                     }
 
-                    prev_acc = acc;
-                    usb_if.send_joystick_report(usb_dev, acc);
-                    joy_old = time_now;
-                }
-
-                if (nudged and dist < 50.0) {
-                    nudged = false;
-                    pins.led.set_level(10);
+                    if (nudged and dist < 50.0) {
+                        nudged = false;
+                        pins.led.set_level(10);
+                    }
                 }
             }
-        }
 
-        accel_ringbuf[ringbuf_index % STABILIZATION_RUN] = acc;
-        if (ringbuf_index > 0 and ringbuf_index % STABILIZATION_RUN == 0) {
-            // Enough samples to check for stable position
-            const accel_avg = accel_math.calculate_accel_ringbuf_avg(accel_ringbuf[0..]);
+            accel_ringbuf[ringbuf_index % STABILIZATION_RUN] = acc;
+            if (ringbuf_index > 0 and ringbuf_index % STABILIZATION_RUN == 0) {
+                // Enough samples to check for stable position
+                const accel_avg = accel_math.calculate_accel_ringbuf_avg(accel_ringbuf[0..]);
 
-            const distance = accel_math.accel_distance(prev_accel_avg, accel_avg);
+                const distance = accel_math.accel_distance(prev_accel_avg, accel_avg);
 
-            if (distance < 50.0) {
-                stabilization_round -= 1;
+                if (distance < 50.0) {
+                    stabilization_round -= 1;
 
-                if (stabilization_round == 0) {
-                    std.log.debug("stabilized", .{});
-                    stable_baseline = accel_avg;
+                    if (stabilization_round == 0) {
+                        std.log.debug("stabilized", .{});
+                        stable_baseline = accel_avg;
+                        stabilization_round = 10;
+                    }
+                } else {
                     stabilization_round = 10;
                 }
-            } else {
-                stabilization_round = 10;
+
+                prev_accel_avg = accel_avg;
             }
 
-            prev_accel_avg = accel_avg;
+            ringbuf_index += 1;
         }
-
-        ringbuf_index += 1;
-
-        // Process pending USB housekeeping
-        usb_dev.task(true) catch unreachable;
 
         const elapsed_time = time.get_time_since_boot().diff(time_start).to_us();
         if (elapsed_time < 1_000) {
