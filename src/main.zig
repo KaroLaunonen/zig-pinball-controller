@@ -12,7 +12,7 @@ const flash_storage = @import("flash_storage.zig");
 const gpio = hal.gpio;
 const time = hal.time;
 
-const i2c0 = hal.i2c.instance.I2C0;
+const i2c1 = hal.i2c.instance.I2C1;
 
 const usb_dev = hal.usb.Usb(.{});
 const usb = microzig.core.usb;
@@ -61,13 +61,13 @@ pub fn main() !void {
     while (true) {}
 
     // Set up I2C
-    try i2c0.apply(.{
+    try i2c1.apply(.{
         .clock_config = hal.clock_config,
         .baud_rate = 400_000,
     });
 
     std.log.info("init lsm6ds33\r\n", .{});
-    var accel_gyro_device = hal.drivers.I2C_Device.init(microzig.hal.i2c.instance.I2C0, microzig.hal.i2c.Address.new(0x6a), drivers.time.Duration.from_ms(200));
+    var accel_gyro_device = hal.drivers.I2C_Device.init(microzig.hal.i2c.instance.I2C1, microzig.hal.i2c.Address.new(0x6a), drivers.time.Duration.from_ms(200));
 
     const accel_gyro_maybe: ?LSM6DS33 = LSM6DS33.init(accel_gyro_device.datagram_device(), true) catch null;
 
