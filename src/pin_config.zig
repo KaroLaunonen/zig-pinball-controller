@@ -24,13 +24,14 @@ pub const pin_config = rp2xxx.pins.GlobalConfiguration{
         .function = .I2C1_SCL,
         .slew_rate = .slow,
     },
-    .GPIO6 = .{
-        .name = "button_1",
-        .direction = .in,
-        .pull = .up,
-    },
-    .GPIO7 = .{
-        .name = "led_1",
-        .direction = .out,
-    },
+
+    // .GPIO6 = .{
+    //     .name = "button_1",
+    //     .direction = .in,
+    //     .pull = .up,
+    // },
+    // .GPIO7 = .{
+    //     .name = "led_1",
+    //     .direction = .out,
+    // },
 };

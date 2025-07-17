@@ -26,6 +26,8 @@ const Acceleration = accel_math.Acceleration;
 const AccelerationRingbuf = accel_math.AccelerationRingbuf;
 const ACCELERATION_RINGBUF_LEN = accel_math.ACCELERATION_RINGBUF_LEN;
 
+const configuration = @import("configuration.zig");
+
 // Set std.log to go to uart
 pub const microzig_options = microzig.Options{
     .log_level = .info,
@@ -58,7 +60,12 @@ pub fn main() !void {
     // var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
     // var button = try flipper_button_input.init(button_gpio.digital_io());
 
-    while (true) {}
+    try configuration.init(&.{
+        .{
+            .switch_pin = hal.pins.Pin.GPIO6,
+            .keycode = .left_shift
+        },
+    });
 
     // Set up I2C
     try i2c1.apply(.{
