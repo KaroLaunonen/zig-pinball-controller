@@ -63,7 +63,7 @@ pub fn main() !void {
     try configuration.init(&.{
         .{
             .switch_pin = hal.pins.Pin.GPIO6,
-            .keycode = .left_shift
+            .key = .a
         },
     });
 

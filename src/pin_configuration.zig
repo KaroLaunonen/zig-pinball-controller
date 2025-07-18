@@ -13,7 +13,7 @@ const PinEntry = struct {
 
     data: union {
         button: struct {
-            keycode: u7,
+            keycode: u8,
         },
 
         led: struct {
