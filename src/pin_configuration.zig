@@ -1,6 +1,7 @@
 const microzig = @import("microzig");
 const Pin = microzig.hal.pins.Pin;
 
+// What is the GPIO pin used for
 const PinFunction = enum {
     button,
     led,
@@ -8,6 +9,19 @@ const PinFunction = enum {
     plunger_2,
 };
 
+// Which position the LED is installed at
+pub const LedPosition = enum {
+    left_flipper,
+    right_flipper,
+    left_magnasave,
+    right_magnasave,
+    plunger_button,
+    start_button,
+    exit_button,
+    coin_button,
+};
+
+//
 const PinEntry = struct {
     function: PinFunction,
 
@@ -17,7 +31,7 @@ const PinEntry = struct {
         },
 
         led: struct {
-            button_pin: Pin,
+            position: LedPosition,
         },
     },
 };
