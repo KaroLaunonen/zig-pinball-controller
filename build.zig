@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
         .target = mb.ports.rp2xxx.boards.raspberrypi.pico,
         .optimize = optimize,
         .root_source_file = b.path("src/main.zig"),
+        .linker_script = b.path("rp2040.ld"),
     });
 
     // We call this twice to demonstrate that the default binary output for

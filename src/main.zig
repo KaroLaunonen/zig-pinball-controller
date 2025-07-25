@@ -7,6 +7,7 @@ const uart_log = @import("uart_log.zig");
 const usb_if = @import("usb_if.zig");
 const accel_math = @import("accel_math.zig");
 const acceleration = accel_math.acceleration;
+const flash_storage = @import("flash_storage.zig");
 
 const gpio = hal.gpio;
 const time = hal.time;
@@ -30,23 +31,30 @@ pub const microzig_options = microzig.Options{
 pub fn main() !void {
     pin_config.apply();
 
-    // Enable PWM on LED pin
-    pins.led.slice().set_wrap(100);
-    pins.led.slice().enable();
-
     _ = uart_log.init();
 
     std.log.info("Starting pinball controller!\r\n", .{});
 
+    var flash = flash_storage.FlashStorage{};
+    const config = flash.getConfigData();
+
+    std.log.info("Flash had config version: {d}", .{config.version});
+
+    // Enable PWM on LED pin
+    pins.led.slice().set_wrap(100);
+    pins.led.slice().enable();
+
     var blinky_prev = time.get_time_since_boot();
 
-    const flipper_button_input = microzig.drivers.input.Debounced_Button(.{
-        .active_state = .low,
-        .filter_depth = 4,
-    });
+    // const flipper_button_input = microzig.drivers.input.Debounced_Button(.{
+    //     .active_state = .low,
+    //     .filter_depth = 4,
+    // });
+    //
+    // var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
+    // var button = try flipper_button_input.init(button_gpio.digital_io());
 
-    var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
-    var button = try flipper_button_input.init(button_gpio.digital_io());
+    while (true) {}
 
     // Set up I2C
     try i2c0.apply(.{
@@ -72,7 +80,7 @@ pub fn main() !void {
     usb_if.init(usb_dev);
 
     var joy_old = time.get_time_since_boot();
-    var key_old = time.get_time_since_boot();
+    // var key_old = time.get_time_since_boot();
 
     var stable_baseline: acceleration = undefined;
 
@@ -149,24 +157,24 @@ pub fn main() !void {
 
         const time_now = time.get_time_since_boot();
 
-        // Poll test button
-        if (time_now.diff(key_old).to_us() > 10_000) {
-            switch (button.poll() catch continue) {
-                .pressed, .released => |event| {
-                    std.log.debug("{s}", .{@tagName(event)});
-                    pins.led_1.put(if (event == .pressed) 1 else 0);
-                    var keycodes: [6]u8 = @splat(0);
-
-                    if (event == .pressed) keycodes[0] = 4; // 'a'
-
-                    usb_if.send_keyboard_report(usb_dev, &keycodes);
-                    usb_dev.task(true) catch unreachable;
-                },
-                .idle => {},
-            }
-
-            key_old = time_now;
-        }
+        // // Poll test button
+        // if (time_now.diff(key_old).to_us() > 10_000) {
+        //     switch (button.poll() catch continue) {
+        //         .pressed, .released => |event| {
+        //             std.log.debug("{s}", .{@tagName(event)});
+        //             pins.led_1.put(if (event == .pressed) 1 else 0);
+        //             var keycodes: [6]u8 = @splat(0);
+        //
+        //             if (event == .pressed) keycodes[0] = 4; // 'a'
+        //
+        //             usb_if.send_keyboard_report(usb_dev, &keycodes);
+        //             usb_dev.task(true) catch unreachable;
+        //         },
+        //         .idle => {},
+        //     }
+        //
+        //     key_old = time_now;
+        // }
 
         // Process pending USB housekeeping
         usb_dev.task(false) catch unreachable;
