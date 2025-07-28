@@ -32,7 +32,7 @@ pub fn get_stable_baseline(accel_gyro: *const LSM6DS33, led: hal.pwm.Pwm, accel_
 
     while (!stable) {
         // LED blinking to indicate running loop
-            if (time.get_time_since_boot().diff(blinky_prev).to_us() > 500_000) {
+        if (time.get_time_since_boot().diff(blinky_prev).to_us() > 500_000) {
             led.set_level(if (led_on) 100 else 0);
             led_on = !led_on;
 
@@ -44,7 +44,7 @@ pub fn get_stable_baseline(accel_gyro: *const LSM6DS33, led: hal.pwm.Pwm, accel_
         if (ringbuf_index > 0 and ringbuf_index % ACCELERATION_RINGBUF_LEN == 0) {
             // Have enough data, calculate average
             // Calculate average
-                const accel_avg = calculate_accel_ringbuf_avg(accel_ringbuf[0..]);
+            const accel_avg = calculate_accel_ringbuf_avg(accel_ringbuf[0..]);
 
             const distance = accel_distance(prev_accel_avg, accel_avg);
 

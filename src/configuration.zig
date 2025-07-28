@@ -22,9 +22,9 @@ const Led = struct {
     position: LedPosition,
 };
 
-const ConfigurationError = error {
+const ConfigurationError = error{
     redefined_pin,
-    unknown_pin
+    unknown_pin,
 };
 
 pub const HardwareConfiguration = struct {
@@ -45,11 +45,11 @@ pub const HardwareConfiguration = struct {
                 if (std.mem.eql(u8, field.name, pin_name)) {
                     var conf_pin = @field(self.pin_conf, pin_name);
                     if (conf_pin != null) {
-                        std.log.err("Redefined button pin: {s}", .{ pin_name });
+                        std.log.err("Redefined button pin: {s}", .{pin_name});
                         return ConfigurationError.redefined_pin;
                     } else {
                         found = true;
-                        std.log.info("Button pin found: {s}", .{ pin_name });
+                        std.log.info("Button pin found: {s}", .{pin_name});
                         conf_pin = .{
                             .function = .button,
                             .data = .{
@@ -63,7 +63,7 @@ pub const HardwareConfiguration = struct {
             }
 
             if (!found) {
-                std.log.err("Unknown pin: {s}", .{ pin_name });
+                std.log.err("Unknown pin: {s}", .{pin_name});
                 return ConfigurationError.unknown_pin;
             }
         }
@@ -77,11 +77,11 @@ pub const HardwareConfiguration = struct {
                 if (std.mem.eql(u8, field.name, pin_name)) {
                     var conf_pin = @field(self.pin_conf, pin_name);
                     if (conf_pin != null) {
-                        std.log.err("Redefined led pin: {s}", .{ pin_name });
+                        std.log.err("Redefined led pin: {s}", .{pin_name});
                         return ConfigurationError.redefined_pin;
                     } else {
                         found = true;
-                        std.log.info("Led pin found: {s}", .{ pin_name });
+                        std.log.info("Led pin found: {s}", .{pin_name});
                         conf_pin = .{
                             .function = .led,
                             .data = .{
@@ -94,7 +94,7 @@ pub const HardwareConfiguration = struct {
                 }
 
                 if (!found) {
-                    std.log.err("Unknown pin: {s}", .{ pin_name });
+                    std.log.err("Unknown pin: {s}", .{pin_name});
                     return ConfigurationError.unknown_pin;
                 }
             }
@@ -103,7 +103,7 @@ pub const HardwareConfiguration = struct {
         std.log.info("Configuration valid. Pins taken:", .{});
         inline for (pin_conf_fields) |field| {
             if (@field(self.pin_conf, field.name)) |_| {
-                std.log.info("  {s}", .{ field.name });
+                std.log.info("  {s}", .{field.name});
             }
         }
     }

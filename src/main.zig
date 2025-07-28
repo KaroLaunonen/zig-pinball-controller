@@ -61,14 +61,12 @@ pub fn main() !void {
     // var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
     // var button = try flipper_button_input.init(button_gpio.digital_io());
 
-    var hwConfig = configuration.HardwareConfiguration {};
+    var hwConfig = configuration.HardwareConfiguration{};
     try hwConfig.init(.{
-        .buttons = &.{
-            .{
-                .switch_pin = hal.pins.Pin.GPIO6,
-                .key = .a,
-            }
-        },
+        .buttons = &.{.{
+            .switch_pin = hal.pins.Pin.GPIO6,
+            .key = .a,
+        }},
         .leds = &.{
             .{
                 .pin = hal.pins.Pin.GPIO7,

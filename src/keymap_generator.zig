@@ -2,7 +2,7 @@ const std = @import("std");
 
 const keycode_map = @import("keymap.zig").keycode_map;
 
-const GeneratorError = error {
+const GeneratorError = error{
     wrong_number_of_args,
     unable_to_open_target,
 };
@@ -21,8 +21,7 @@ pub fn main() !void {
     }
 
     const cwd = std.fs.cwd();
-    var keymap_entry_file = cwd.createFile(args[2],
-        .{ .truncate = true }) catch {
+    var keymap_entry_file = cwd.createFile(args[2], .{ .truncate = true }) catch {
         return GeneratorError.unable_to_open_target;
     };
     defer keymap_entry_file.close();
@@ -39,8 +38,8 @@ pub fn main() !void {
     var buf: [256]u8 = undefined;
     for (keycode_map.keys()) |key| {
         buf = @splat(0);
-        _ = try std.fmt.bufPrint(&buf, "    {s},\n", .{ key });
-        _ = try writer.write(buf[0..std.mem.indexOf(u8, &buf, "\x00") orelse 0]);
+        _ = try std.fmt.bufPrint(&buf, "    {s},\n", .{key});
+        _ = try writer.write(buf[0 .. std.mem.indexOf(u8, &buf, "\x00") orelse 0]);
     }
     _ = try writer.write(
         \\};

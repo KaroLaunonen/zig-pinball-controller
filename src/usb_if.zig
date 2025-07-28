@@ -22,7 +22,7 @@ const HID_KeymodifierCodes = enum(u8) {
     right_gui,
 };
 
-
+// zig fmt: off
 pub const HID_ModifierMasks = enum(u8) {
     no_modifiers    = 0x00,
     left_control    = 0x01,
@@ -34,8 +34,10 @@ pub const HID_ModifierMasks = enum(u8) {
     right_alt       = 0x40,
     right_meta      = 0x80,
 };
+// zig fmt: on
 
 // Split into two separate report descriptors
+// zig fmt: off
 const JoystickReportDescriptor = hid.hid_usage_page(1, hid.UsageTable.desktop) ++ hid.hid_usage(1, hid.DesktopUsage.joystick) ++ hid.hid_collection(hid.CollectionItem.Application) // Application collection
     ++ hid.hid_collection(hid.CollectionItem.Logical) // Logical collection
     ++ hid.hid_logical_min(2, "\x00\x80".*) // -32767
@@ -70,6 +72,7 @@ const KeyboardReportDescriptor = hid.hid_usage_page(1, hid.UsageTable.desktop)
     ++ hid.hid_usage_max(1, "\x65".*)
     ++ hid.hid_input(hid.HID_DATA | hid.HID_ARRAY | hid.HID_ABSOLUTE)
     ++ hid.hid_collection_end();
+// zig fmt: on
 
 // Create two separate report buffers
 var joystickReportBuf: [7]u8 = @splat(0);
