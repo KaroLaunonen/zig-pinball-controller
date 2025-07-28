@@ -20,13 +20,15 @@ pub fn build(b: *std.Build) void {
     run_keymap_generator.addArgs(&.{
         "src/keymap.zig",
     });
+    run_keymap_generator.addFileInput(b.path("src/keymap.zig"));
+
     const keymap_entry_path = run_keymap_generator.addOutputFileArg("zig-out/keymap_entry.zig");
 
     const keymap_entry_module = b.createModule(.{
         .root_source_file = keymap_entry_path,
     });
 
-    // const generator_step = b.step("keymap_generator", "Generates keymap_entry.zig file");
+    const generator_step = b.step("keymap_generator", "Generates keymap_entry.zig file");
 
     const mz_dep = b.dependency("microzig", .{});
     const mb = MicroBuild.init(b, mz_dep) orelse return;
@@ -42,6 +44,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    firmware.artifact.step.dependOn(generator_step);
     firmware.app_mod.addImport("keymap_entry", keymap_entry_module);
 
     const want_uf2 = b.option(bool, "uf2", "Build uf2 image") orelse false;
