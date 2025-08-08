@@ -7,104 +7,101 @@ const keymap = @import("keymap.zig");
 const KeymapEntry = @import("keymap_entry").KeymapEntry;
 const LedPosition = pin_configuration.LedPosition;
 
+const GpioPinNumber = u5;
+
 pub const HwConfig = struct {
     buttons: []const Button,
     leds: []const Led,
 };
 
 const Button = struct {
-    switch_pin: hal.pins.Pin,
+    switch_pin: GpioPinNumber,
     key: KeymapEntry,
 };
 
 const Led = struct {
-    pin: hal.pins.Pin,
+    pin: GpioPinNumber,
     position: LedPosition,
 };
 
 const ConfigurationError = error{
-    redefined_pin,
-    unknown_pin,
+    RedefinedPin,
+    UnknownPin,
+    OutOfMemory,
+    UnknownError,
 };
 
 pub const HardwareConfiguration = struct {
     // Check configuration validity
-    pin_conf: pin_configuration.PinConfiguration = .{},
+    pin_conf: pin_configuration.PinConfiguration,
+    button_pins: u30 = 0,
 
-    pub fn init(self: *const @This(), comptime config: HwConfig) ConfigurationError!void {
-        const pin_conf_fields = @typeInfo(@TypeOf(self.pin_conf)).@"struct".fields;
+    pub fn init(config_data: HwConfig) ConfigurationError!HardwareConfiguration {
+        std.log.info("Configuration has {d} {s}, {d} {s}", .{
+            config_data.buttons.len,
+            if (config_data.buttons.len == 1) "button" else "buttons",
+            config_data.leds.len,
+            if (config_data.leds.len == 1) "led" else "leds",
+        });
 
-        std.log.info("Configuration has {d} buttons, {d} leds", .{ config.buttons.len, config.leds.len });
+        var pin_conf: pin_configuration.PinConfiguration = @splat(null);
+        var button_pins: u30 = 0;
 
         // Handle button definitions
-        inline for (config.buttons) |button| {
-            const pin_name = @tagName(button.switch_pin);
-
-            var found = false;
-            inline for (pin_conf_fields) |field| {
-                if (std.mem.eql(u8, field.name, pin_name)) {
-                    var conf_pin = @field(self.pin_conf, pin_name);
-                    if (conf_pin != null) {
-                        std.log.err("Redefined button pin: {s}", .{pin_name});
-                        return ConfigurationError.redefined_pin;
-                    } else {
-                        found = true;
-                        std.log.info("Button pin found: {s}", .{pin_name});
-                        conf_pin = .{
-                            .function = .button,
-                            .data = .{
-                                .button = .{
-                                    .keycode = keymap.keycode_map.get(@tagName(button.key)).?,
-                                },
-                            },
-                        };
-                    }
-                }
+        for (config_data.buttons) |button| {
+            if (pin_conf[button.switch_pin] != null) {
+                std.log.err("Button pin GPIO{d} already defined", .{button.switch_pin});
+                return ConfigurationError.RedefinedPin;
             }
 
-            if (!found) {
-                std.log.err("Unknown pin: {s}", .{pin_name});
-                return ConfigurationError.unknown_pin;
-            }
+            pin_conf[button.switch_pin] = .{
+                .function = .button,
+                .data = .{
+                    .button = .{
+                        .keycode = keymap.keycode_map.get(@tagName(button.key)).?,
+                    },
+                },
+            };
+
+            button_pins = button_pins | (@as(u30, 1) << button.switch_pin);
         }
 
         // Handle led definitions
-        inline for (config.leds) |led| {
-            const pin_name = @tagName(led.pin);
-
-            var found = false;
-            inline for (pin_conf_fields) |field| {
-                if (std.mem.eql(u8, field.name, pin_name)) {
-                    var conf_pin = @field(self.pin_conf, pin_name);
-                    if (conf_pin != null) {
-                        std.log.err("Redefined led pin: {s}", .{pin_name});
-                        return ConfigurationError.redefined_pin;
-                    } else {
-                        found = true;
-                        std.log.info("Led pin found: {s}", .{pin_name});
-                        conf_pin = .{
-                            .function = .led,
-                            .data = .{
-                                .led = .{
-                                    .position = led.position,
-                                },
-                            },
-                        };
-                    }
-                }
-
-                if (!found) {
-                    std.log.err("Unknown pin: {s}", .{pin_name});
-                    return ConfigurationError.unknown_pin;
-                }
+        for (config_data.leds) |led| {
+            if (pin_conf[led.pin] != null) {
+                std.log.err("Led pin GPIO{d} already defined", .{led.pin});
+                return ConfigurationError.RedefinedPin;
             }
+
+            pin_conf[led.pin] = .{
+                .function = .led,
+                .data = .{
+                    .led = .{
+                        .position = led.position,
+                    },
+                },
+            };
         }
 
         std.log.info("Configuration valid. Pins taken:", .{});
-        inline for (pin_conf_fields) |field| {
-            if (@field(self.pin_conf, field.name)) |_| {
-                std.log.info("  {s}", .{field.name});
+        for (pin_conf, 0..) |maybe_entry, pin| {
+            if (maybe_entry) |entry| {
+                std.log.info("  * GPIO{d}: {s}", .{pin, switch (entry.function) {
+                    .button => "button",
+                    .led => "led",
+                    .plunger_1 => "plunger_1",
+                    .plunger_2 => "plunger_2",
+               }});
             }
         }
+
+        return .{
+            .pin_conf = pin_conf,
+            .button_pins = button_pins,
+        };
+    }
+
+    pub fn num_buttons(self: *const @This()) u6 {
+        return @popCount(self.button_pins);
     }
 };

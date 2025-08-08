@@ -29,11 +29,29 @@ const ACCELERATION_RINGBUF_LEN = accel_math.ACCELERATION_RINGBUF_LEN;
 const configuration = @import("configuration.zig");
 const LedPosition = @import("pin_configuration.zig").LedPosition;
 
+const ButtonArray = std.BoundedArray(FlipperButton, 30);
+
+const FlipperButtonReader = microzig.drivers.input.Debounced_Button(.{
+    .active_state = .low,
+    .filter_depth = 4,
+});
+
+const FlipperButton = struct {
+    keycode: u7,
+    button: FlipperButtonReader,
+};
+
 // Set std.log to go to uart
 pub const microzig_options = microzig.Options{
     .log_level = .info,
     .logFn = hal.uart.log,
 };
+
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    std.log.err("{s}", .{msg});
+
+    while(true) {}
+}
 
 pub fn main() !void {
     pin_config.apply();
@@ -51,29 +69,26 @@ pub fn main() !void {
     pins.led.slice().set_wrap(100);
     pins.led.slice().enable();
 
-    // var blinky_prev = time.get_time_since_boot();
-
-    // const flipper_button_input = microzig.drivers.input.Debounced_Button(.{
-    //     .active_state = .low,
-    //     .filter_depth = 4,
-    // });
-    //
-    // var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
-    // var button = try flipper_button_input.init(button_gpio.digital_io());
-
-    var hwConfig = configuration.HardwareConfiguration{};
-    try hwConfig.init(.{
+    const hw_config = try configuration.HardwareConfiguration.init(.{
         .buttons = &.{.{
-            .switch_pin = hal.pins.Pin.GPIO6,
+            .switch_pin = 6,
             .key = .a,
         }},
         .leds = &.{
             .{
-                .pin = hal.pins.Pin.GPIO7,
+                .pin = 7,
                 .position = LedPosition.left_flipper,
             },
         },
     });
+
+
+    var buttons = try ButtonArray.init(hw_config.num_buttons());
+    try setup_buttons(&buttons, &hw_config);
+
+    // var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
+    // var button = try flipper_button_input.init(button_gpio.digital_io());
+
 
     // Set up I2C
     i2c1.apply(.{
@@ -96,7 +111,7 @@ pub fn main() !void {
     }
 
     var joy_old = time.get_time_since_boot();
-    // var key_old = time.get_time_since_boot();
+    var key_old = time.get_time_since_boot();
 
     var stable_baseline: Acceleration = undefined;
 
@@ -131,24 +146,21 @@ pub fn main() !void {
 
         const time_now = time.get_time_since_boot();
 
-        // // Poll test button
-        // if (time_now.diff(key_old).to_us() > 10_000) {
-        //     switch (button.poll() catch continue) {
-        //         .pressed, .released => |event| {
-        //             std.log.debug("{s}", .{@tagName(event)});
-        //             pins.led_1.put(if (event == .pressed) 1 else 0);
-        //             var keycodes: [6]u8 = @splat(0);
-        //
-        //             if (event == .pressed) keycodes[0] = 4; // 'a'
-        //
-        //             usb_if.send_keyboard_report(usb_dev, &keycodes);
-        //             usb_dev.task(true) catch unreachable;
-        //         },
-        //         .idle => {},
-        //     }
-        //
-        //     key_old = time_now;
-        // }
+        // Poll test button
+        if (time_now.diff(key_old).to_us() > 10_000) {
+            // switch (button.poll() catch continue) {
+            //     .pressed, .released => |event| {
+            //         std.log.debug("{s}", .{@tagName(event)});
+            //         pins.led_1.put(if (event == .pressed) 1 else 0);
+            //         var keycodes: [6]u8 = @splat(0);
+            //                 if (event == .pressed) keycodes[0] = 4; // 'a'
+            //                 usb_if.send_keyboard_report(usb_dev, &keycodes);
+            //         usb_dev.task(true) catch unreachable;
+            //     },
+            //     .idle => {},
+            // }
+            key_old = time_now;
+        }
 
         // Process pending USB housekeeping
         usb_dev.task(false) catch unreachable;
@@ -212,4 +224,21 @@ pub fn main() !void {
             time.sleep_us(1_000 - elapsed_time);
         }
     }
+}
+
+fn setup_buttons(buttons: *ButtonArray, conf: *const configuration.HardwareConfiguration) !void {
+    var pin_mask: u30 = 1;
+
+    std.log.debug("Setting up buttons", .{});
+    for (0..30) |pin| {
+        if ((conf.button_pins & pin_mask) != 0) {
+            var button = try buttons.addOne();
+            const gpio_pin = hal.gpio.num(@intCast(pin));
+            var gpio_device = hal.drivers.GPIO_Device.init(gpio_pin);
+            button.button = try FlipperButtonReader.init(gpio_device.digital_io());
+        }
+
+        pin_mask <<= 1;
+    }
+    std.log.debug("Buttons all set up", .{});
 }
