@@ -37,21 +37,17 @@ const FlipperButtonReader = microzig.drivers.input.Debounced_Button(.{
 });
 
 const FlipperButton = struct {
-    keycode: u7,
-    button: FlipperButtonReader,
+    keycode: u8,
+    reader: FlipperButtonReader,
 };
+
+const FlipperButtonList = std.MultiArrayList(FlipperButton);
 
 // Set std.log to go to uart
 pub const microzig_options = microzig.Options{
-    .log_level = .info,
+    .log_level = .debug,
     .logFn = hal.uart.log,
 };
-
-pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
-    std.log.err("{s}", .{msg});
-
-    while(true) {}
-}
 
 pub fn main() !void {
     pin_config.apply();
@@ -72,7 +68,7 @@ pub fn main() !void {
     const hw_config = try configuration.HardwareConfiguration.init(.{
         .buttons = &.{.{
             .switch_pin = 6,
-            .key = .a,
+            .key = .left_shift,
         }},
         .leds = &.{
             .{
@@ -82,13 +78,17 @@ pub fn main() !void {
         },
     });
 
+    var buttons_buffer: [2048]u8 = @splat(0);
+    var fba = std.heap.FixedBufferAllocator.init(&buttons_buffer);
+    const allocator = fba.allocator();
 
-    var buttons = try ButtonArray.init(hw_config.num_buttons());
-    try setup_buttons(&buttons, &hw_config);
+    var buttons_list = FlipperButtonList{};
+    try buttons_list.ensureTotalCapacity(allocator, hw_config.num_buttons());
+    defer buttons_list.deinit(allocator);
 
-    // var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
-    // var button = try flipper_button_input.init(button_gpio.digital_io());
-
+    //var buttons = try ButtonArray.init(hw_config.num_buttons());
+    try setup_buttons(&buttons_list, &hw_config);
+    std.log.debug("{d} buttons set up", .{buttons_list.len});
 
     // Set up I2C
     i2c1.apply(.{
@@ -141,6 +141,8 @@ pub fn main() !void {
 
     std.log.info("start main loop", .{});
 
+    var keycodes: [6]u8 = @splat(0);
+
     while (true) {
         time_start = time.get_time_since_boot();
 
@@ -148,17 +150,33 @@ pub fn main() !void {
 
         // Poll test button
         if (time_now.diff(key_old).to_us() > 10_000) {
-            // switch (button.poll() catch continue) {
-            //     .pressed, .released => |event| {
-            //         std.log.debug("{s}", .{@tagName(event)});
-            //         pins.led_1.put(if (event == .pressed) 1 else 0);
-            //         var keycodes: [6]u8 = @splat(0);
-            //                 if (event == .pressed) keycodes[0] = 4; // 'a'
-            //                 usb_if.send_keyboard_report(usb_dev, &keycodes);
-            //         usb_dev.task(true) catch unreachable;
-            //     },
-            //     .idle => {},
-            // }
+            var changed = false;
+
+            // std.log.debug("Read {d} buttons", .{buttons_list.len});
+            for (0..buttons_list.len) |button_index| {
+                const button = buttons_list.get(button_index);
+
+                var reader = button.reader;
+                switch (reader.poll() catch continue) {
+                    .pressed => {
+                        // std.log.debug("prs {x}", .{button.keycode});
+
+                        changed = changed or add_to_keycodes(&keycodes, button.keycode);
+                    },
+                    .released => {
+                        std.log.debug(" rel {x}", .{button.keycode});
+
+                        changed = changed or remove_from_keycodes(&keycodes, button.keycode);
+                    },
+                    .idle => {},
+                }
+            }
+
+            if (changed) {
+                usb_if.send_keyboard_report(usb_dev, 0, &keycodes);
+                usb_dev.task(true) catch unreachable;
+            }
+
             key_old = time_now;
         }
 
@@ -226,19 +244,87 @@ pub fn main() !void {
     }
 }
 
-fn setup_buttons(buttons: *ButtonArray, conf: *const configuration.HardwareConfiguration) !void {
+fn setup_buttons(buttons: *FlipperButtonList, conf: *const configuration.HardwareConfiguration) !void {
     var pin_mask: u30 = 1;
 
     std.log.debug("Setting up buttons", .{});
-    for (0..30) |pin| {
+    var pin_num: u9 = 0;
+    while (pin_num < 30) {
         if ((conf.button_pins & pin_mask) != 0) {
-            var button = try buttons.addOne();
-            const gpio_pin = hal.gpio.num(@intCast(pin));
+            const gpio_pin = hal.gpio.num(pin_num);
+            gpio_pin.set_direction(.in);
+            gpio_pin.set_pull(.up);
+
+            std.log.debug("gpio {}", .{gpio_pin});
             var gpio_device = hal.drivers.GPIO_Device.init(gpio_pin);
-            button.button = try FlipperButtonReader.init(gpio_device.digital_io());
+            std.log.debug("gpio digi device {}", .{gpio_device});
+            const digital_io_dev = gpio_device.digital_io();
+            std.log.debug("digi io device {}", .{digital_io_dev});
+
+            const keycode = conf.pin_conf[pin_num].?.data.button.keycode;
+            std.log.debug("keycode {x}", .{keycode});
+            std.log.debug("append", .{});
+            // try buttons.append(allocator, .{
+            //     .keycode = conf.pin_conf[pin].?.data.button.keycode,
+            //     .reader = reader,
+            // });
+            buttons.appendAssumeCapacity(.{
+                .keycode = keycode,
+                .reader = try FlipperButtonReader.init(digital_io_dev),
+            });
+            std.log.debug("appended", .{});
         }
 
         pin_mask <<= 1;
+        pin_num += 1;
     }
     std.log.debug("Buttons all set up", .{});
+}
+
+inline fn add_to_keycodes(keycodes: *[6]u8, keycode: u8) bool {
+    var index: u4 = 0;
+
+    while (index < 6) {
+        if (keycodes[index] == keycode) {
+            // Already there
+            return false;
+        } else if (keycodes[index] == 0) {
+            // Found an empty spot
+            std.log.debug(" * empty slot at {d}", .{index});
+            keycodes[index] = keycode;
+            return true;
+        }
+
+        index += 1;
+    }
+
+    // Didn't have space
+    std.log.warn("Keypress didn't fit", .{});
+    return false;
+}
+
+inline fn remove_from_keycodes(keycodes: *[6]u8, keycode: u8) bool {
+    var index: u4 = 0;
+
+    while (index < 6) {
+        if (keycodes[index] == keycode) {
+            // Found
+            while (keycodes[index] != 0 and index < 5) {
+                keycodes[index] = keycodes[index + 1];
+                index += 1;
+            }
+            keycodes[5] = 0;
+
+            return true;
+
+        } else if (keycodes[index] == 0) {
+            // Wasn't here
+            return false;
+        }
+
+        index += 1;
+    }
+
+    // Wasn't here
+    return false;
 }

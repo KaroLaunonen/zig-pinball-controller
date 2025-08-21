@@ -75,8 +75,8 @@ const KeyboardReportDescriptor = hid.hid_usage_page(1, hid.UsageTable.desktop)
 // zig fmt: on
 
 // Create two separate report buffers
-var joystickReportBuf: [7]u8 = @splat(0);
-var keyboardReportBuf: [7]u8 = @splat(0);
+var joystickReportBuf: [8]u8 = @splat(0);
+var keyboardReportBuf: [8]u8 = @splat(0);
 
 const joystickEpAddr = rp2xxx.usb.Endpoint.to_address(1, .In);
 const keyboardEpAddr = rp2xxx.usb.Endpoint.to_address(2, .In);
