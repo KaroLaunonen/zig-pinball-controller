@@ -19,8 +19,10 @@ pub fn build(b: *std.Build) void {
         .linker_script = b.path("rp2040.ld"),
     });
 
-    // We call this twice to demonstrate that the default binary output for
-    // RP2040 is UF2, but we can also output other formats easily
-    // mb.install_firmware(firmware, .{ });
-    mb.install_firmware(firmware, .{ .format = .elf });
+    const want_uf2 = b.option(bool, "uf2", "Build uf2 image") orelse false;
+    if (want_uf2) {
+        mb.install_firmware(firmware, .{ });
+    } else {
+        mb.install_firmware(firmware, .{ .format = .elf });
+    }
 }

@@ -43,11 +43,19 @@ Connect the flipper button to a GPIO pin on your Raspberry Pi Pico board. In thi
    ```sh
    git clone https://github.com/KaroLaunonen/zig-pinball-controller.git
    cd zig-pinball-controller
+   ```
 
 2. Build the project using Zig:
 
     ```sh
-    zig build -Dtarget=microzig-rp2040
+    zig build
+	```
+	
+    This build an elf binary. If you want UF2 instead, use
+
+    ```sh
+    zig build -Duf2=true
+    ```
 
 ## Author
 Karo Launonen - karo.launonen@boogiesoftware.com
