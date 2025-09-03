@@ -2,7 +2,9 @@ const std = @import("std");
 const microzig = @import("microzig");
 const hal = microzig.hal;
 
-const pin_config = @import("pin_config.zig").pin_config;
+const pin_config = @import("pin_config.zig");
+const pins = pin_config.pins;
+
 const uart_log = @import("uart_log.zig");
 const usb_if = @import("usb_if.zig");
 const accel_math = @import("accel_math.zig");
@@ -12,7 +14,7 @@ const flash_storage = @import("flash_storage.zig");
 const gpio = hal.gpio;
 const time = hal.time;
 
-const i2c0 = hal.i2c.instance.I2C0;
+const i2c1 = hal.i2c.instance.I2C1;
 
 const usb_dev = hal.usb.Usb(.{});
 const usb = microzig.core.usb;
@@ -20,10 +22,12 @@ const usb = microzig.core.usb;
 const drivers = microzig.drivers;
 const LSM6DS33 = drivers.sensor.LSM6DS33;
 
-const pins = pin_config.pins();
 const Acceleration = accel_math.Acceleration;
 const AccelerationRingbuf = accel_math.AccelerationRingbuf;
 const ACCELERATION_RINGBUF_LEN = accel_math.ACCELERATION_RINGBUF_LEN;
+
+const configuration = @import("configuration.zig");
+const LedPosition = @import("pin_configuration.zig").LedPosition;
 
 // Set std.log to go to uart
 pub const microzig_options = microzig.Options{
@@ -32,7 +36,7 @@ pub const microzig_options = microzig.Options{
 };
 
 pub fn main() !void {
-    pin_config.apply();
+    pin_config.pin_config.apply();
 
     _ = uart_log.init();
 
@@ -58,15 +62,14 @@ pub fn main() !void {
     while (true) {}
 
     // Set up I2C
-    try i2c0.apply(.{
+    i2c1.apply(.{
         .clock_config = hal.clock_config,
         .baud_rate = 400_000,
     });
 
     std.log.info("init lsm6ds33\r\n", .{});
-    var accel_gyro_device = hal.drivers.I2C_Device.init(microzig.hal.i2c.instance.I2C0, microzig.hal.i2c.Address.new(0x6a), drivers.time.Duration.from_ms(200));
-
-    const accel_gyro_maybe: ?LSM6DS33 = LSM6DS33.init(accel_gyro_device.datagram_device(), true) catch null;
+    var i2c_device = hal.drivers.I2C_Device.init(i2c1, drivers.time.Duration.from_ms(200));
+    const accel_gyro_maybe: ?LSM6DS33 = LSM6DS33.init(i2c_device.i2c_device(), @enumFromInt(0x6a), true) catch null;
 
     if (accel_gyro_maybe) |accel_gyro| {
         try accel_gyro.reset();

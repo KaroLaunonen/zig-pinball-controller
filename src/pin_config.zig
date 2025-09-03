@@ -14,23 +14,16 @@ pub const pin_config = rp2xxx.pins.GlobalConfiguration{
     .GPIO1 = .{
         .function = .UART0_RX,
     },
-    .GPIO4 = .{
+    .GPIO2 = .{
         .name = "sda",
-        .function = .I2C0_SDA,
+        .function = .I2C1_SDA,
         .slew_rate = .slow,
     },
-    .GPIO5 = .{
+    .GPIO3 = .{
         .name = "scl",
-        .function = .I2C0_SCL,
+        .function = .I2C1_SCL,
         .slew_rate = .slow,
-    },
-    .GPIO6 = .{
-        .name = "button_1",
-        .direction = .in,
-        .pull = .up,
-    },
-    .GPIO7 = .{
-        .name = "led_1",
-        .direction = .out,
     },
 };
+
+pub const pins = pin_config.pins();
