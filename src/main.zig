@@ -113,7 +113,7 @@ pub fn main() !void {
         .baud_rate = 400_000,
     });
 
-    std.log.info("init lsm6ds33\r\n", .{});
+    ms_log.info("init lsm6ds33\r\n", .{});
     var i2c_device = hal.drivers.I2C_Device.init(i2c1, drivers.time.Duration.from_ms(200));
     const accel_gyro_maybe: ?LSM6DS33 = LSM6DS33.init(i2c_device.i2c_device(), @enumFromInt(0x6a), true) catch null;
 
@@ -123,7 +123,7 @@ pub fn main() !void {
         try accel_gyro.set_output_data_rate(.hz_104);
         try accel_gyro.set_accelerator_full_scale(.fs_4g);
         try accel_gyro.set_anti_aliasing_filter_bandwidth(.fb_50hz);
-        std.log.info("done init lsm6ds33\r\n", .{});
+        ms_log.info("done init lsm6ds33\r\n", .{});
     }
 
     var joy_old = time.get_time_since_boot();
@@ -139,9 +139,9 @@ pub fn main() !void {
     // Get stable acceleration baseline
     {
         try accel_math.get_stable_baseline(&accel_gyro, pins.led, &accel_ringbuf, &stable_baseline);
-        std.log.info("stabilization done", .{});
+        ms_log.info("stabilization done", .{});
     } else {
-        std.log.info("Skipping stabilization loop", .{});
+        ms_log.info("Skipping stabilization loop", .{});
     }
 
     var prev_acc: Acceleration = stable_baseline;
@@ -152,7 +152,6 @@ pub fn main() !void {
     std.log.info("usb init", .{});
 
     try usb_if.init(usb_dev);
-    std.log.info("usb init done", .{});
 
     std.log.info("start main loop", .{});
 
@@ -245,7 +244,7 @@ pub fn main() !void {
                     stabilization_round -= 1;
 
                     if (stabilization_round == 0) {
-                        std.log.debug("stabilized", .{});
+                        ms_log.debug("stabilized", .{});
                         stable_baseline = accel_avg;
                         stabilization_round = 10;
                     }
