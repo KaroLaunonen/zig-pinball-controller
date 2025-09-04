@@ -10,13 +10,18 @@ const usb_if = @import("usb_if.zig");
 const accel_math = @import("accel_math.zig");
 const acceleration = accel_math.acceleration;
 const flash_storage = @import("flash_storage.zig");
+const core1 = @import("core1.zig");
+const multicore = hal.multicore;
 
 const gpio = hal.gpio;
 const time = hal.time;
 
 const i2c1 = hal.i2c.instance.I2C1;
 
-const usb_dev = hal.usb.Usb(.{});
+const usb_dev = hal.usb.Usb(.{
+    .max_interfaces_count = 2,
+    .max_endpoints_count = 3,
+});
 const usb = microzig.core.usb;
 
 const drivers = microzig.drivers;
@@ -61,9 +66,11 @@ pub const microzig_options = microzig.Options{
 };
 
 pub fn main() !void {
+    multicore.launch_core1(core1.core1_entry);
+
     pin_config.pin_config.apply();
 
-    const uart_writer = uart_log.init();
+    _ = uart_log.init();
 
     std.log.info("Starting pinball controller!\r\n", .{});
 
@@ -76,15 +83,29 @@ pub fn main() !void {
     pins.led.slice().set_wrap(100);
     pins.led.slice().enable();
 
-    // const flipper_button_input = microzig.drivers.input.Debounced_Button(.{
-    //     .active_state = .low,
-    //     .filter_depth = 4,
-    // });
-    //
-    // var button_gpio = hal.drivers.GPIO_Device.init(pins.button_1);
-    // var button = try flipper_button_input.init(button_gpio.digital_io());
+    const hw_config = try configuration.HardwareConfiguration.init(.{
+        .buttons = &.{
+            .{
+                .switch_pin = 6,
+                .key = .left_shift,
+            },
+            .{
+                .switch_pin = 5,
+                .key = .right_shift,
+            },
+        },
+        .leds = &.{
+            .{
+                .pin = 16,
+                .position = LedPosition.left_flipper,
+            },
+        },
+    });
 
-    while (true) {}
+    // Setup all button pins for input
+    const mask = gpio.mask(hw_config.button_pins);
+    mask.set_direction(.in);
+    mask.set_pull(.up);
 
     // Set up I2C
     i2c1.apply(.{
@@ -105,10 +126,8 @@ pub fn main() !void {
         std.log.info("done init lsm6ds33\r\n", .{});
     }
 
-    std.log.info("usb init", .{});
-    usb_if.init(usb_dev);
-
     var joy_old = time.get_time_since_boot();
+    var key_old = time.get_time_since_boot();
 
     var stable_baseline: Acceleration = undefined;
 
@@ -130,31 +149,58 @@ pub fn main() !void {
     var stabilization_round: u8 = 10;
     var nudged = false;
 
-    pins.led.set_level(20);
+    std.log.info("usb init", .{});
+
+    try usb_if.init(usb_dev);
+    std.log.info("usb init done", .{});
 
     std.log.info("start main loop", .{});
+
+    // Inform core1 of the button pins
+    core1.set_button_pins(hw_config.button_pins);
+
+    var keycodes: [6]u8 = @splat(0);
+
+    const pin_start_index = @ctz(hw_config.button_pins);
+    const pin_end_index = @as(u32, 32) - @clz(hw_config.button_pins);
 
     while (true) {
         const time_now = time.get_time_since_boot();
 
-        // // Poll test button
-        // if (time_now.diff(key_old).to_us() > 10_000) {
-        //     switch (button.poll() catch continue) {
-        //         .pressed, .released => |event| {
-        //             std.log.debug("{s}", .{@tagName(event)});
-        //             pins.led_1.put(if (event == .pressed) 1 else 0);
-        //             var keycodes: [6]u8 = @splat(0);
-        //
-        //             if (event == .pressed) keycodes[0] = 4; // 'a'
-        //
-        //             usb_if.send_keyboard_report(usb_dev, &keycodes);
-        //             usb_dev.task(true) catch unreachable;
-        //         },
-        //         .idle => {},
-        //     }
-        //
-        //     key_old = time_now;
-        // }
+        if (time_now.diff(key_old).to_us() > 10_000) {
+            if (core1.get_pin_readings()) |readings| {
+                keycodes = @splat(0);
+                kbd_log.debug("{b:032}", .{readings});
+
+                var key_modifiers: u8 = 0;
+                var keycode_index: u3 = 0;
+                var pin_mask: u32 = @as(u32, 1) << @truncate(pin_start_index);
+                pin_check_loop: for (pin_start_index..pin_end_index) |pin_index| {
+                    if (readings & pin_mask != 0) {
+                        const keycode = hw_config.pin_conf[pin_index].?.data.button.keycode;
+
+                        if (keycode >= 0xe0 and keycode < 0xe8) {
+                            const bit_mask: u8 = @as(u8, 1) << @truncate(keycode - 0xe0);
+                            key_modifiers = key_modifiers | bit_mask;
+                        } else {
+                            keycodes[keycode_index] = hw_config.pin_conf[pin_index].?.data.button.keycode;
+                            keycode_index += 1;
+                        }
+
+                        if (keycode_index == 6) {
+                            kbd_log.warn("key buffer full: {any}", .{keycodes});
+                            break :pin_check_loop;
+                        }
+                    }
+
+                    pin_mask <<= 1;
+                }
+
+                usb_if.send_keyboard_report(usb_dev, key_modifiers, keycodes[0..]);
+            }
+
+            key_old = time_now;
+        }
 
         // Process pending USB housekeeping
         try usb_dev.task(true);
