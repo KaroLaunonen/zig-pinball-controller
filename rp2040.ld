@@ -25,12 +25,17 @@ SECTIONS
   ASSERT(__boot2_end__ - __boot2_start__ == 256,
     "ERROR: Pico second stage bootloader must be 256 bytes in size")
 
-  .text :
-  {
+   .flash_start :
+   {
      KEEP(*(microzig_flash_start))
+   } > flash0
+
+   .text :
+   {
      *(.text*)
+     *(.srodata*)
      *(.rodata*)
-  } > flash0
+   } > flash0
 
   .ARM.extab : {
       *(.ARM.extab* .gnu.linkonce.armextab.*)
@@ -40,29 +45,21 @@ SECTIONS
       *(.ARM.exidx* .gnu.linkonce.armexidx.*)
   } >flash0
 
-  .flash1 :
-  {
-    *(.flash1)
-  } > flash1
-
   .data :
   {
-     microzig_data_start = .;
-     KEEP(*(.time_critical*))
-     *(.data*)
-     microzig_data_end = .;
+    microzig_data_start = .;
+    *(.sdata*)
+    *(.data*)
+    KEEP(*(.ram_text))
+    microzig_data_end = .;
   } > ram0 AT> flash0
 
-  .bss (NOLOAD) :
+  .bss (NOLOAD):
   {
-      microzig_bss_start = .;
-      *(.bss*)
-      microzig_bss_end = .;
-  } > ram0
-
-  .ram_vectors (NOLOAD) :
-  {
-    KEEP(*(ram_vectors))
+    microzig_bss_start = .;
+    *(.sbss*)
+    *(.bss*)
+    microzig_bss_end = .;
   } > ram0
 
   .flash_end :
