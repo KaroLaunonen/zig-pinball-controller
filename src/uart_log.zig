@@ -1,6 +1,8 @@
 const microzig = @import("microzig");
 const rp2xxx = microzig.hal;
 
+pub var uart_writer: rp2xxx.uart.UART.Writer = undefined;
+
 pub fn init() rp2xxx.uart.UART.Writer {
     // Init UART0 and logging
     const uart0 = rp2xxx.uart.instance.UART0;
@@ -12,5 +14,6 @@ pub fn init() rp2xxx.uart.UART.Writer {
 
     rp2xxx.uart.init_logger(uart0);
 
+    uart_writer = uart0.writer();
     return uart0.writer();
 }
