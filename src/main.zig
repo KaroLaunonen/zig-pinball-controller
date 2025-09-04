@@ -29,16 +29,41 @@ const ACCELERATION_RINGBUF_LEN = accel_math.ACCELERATION_RINGBUF_LEN;
 const configuration = @import("configuration.zig");
 const LedPosition = @import("pin_configuration.zig").LedPosition;
 
+const kbd_log = std.log.scoped(.keyboard);
+const ms_log = std.log.scoped(.motion_sensor);
+
 // Set std.log to go to uart
 pub const microzig_options = microzig.Options{
     .log_level = .info,
-    .logFn = hal.uart.log,
+    .logFn = hal.uart.log_threadsafe,
+    .log_scope_levels = &.{
+        .{
+            .scope = .usb,
+            .level = .info,
+        },
+        .{
+            .scope = .pwm,
+            .level = .info,
+        },
+        .{
+            .scope = .core1_log,
+            .level = .debug,
+        },
+        .{
+            .scope = .keyboard,
+            .level = .info,
+        },
+        .{
+            .scope = .motion_sensor,
+            .level = .debug,
+        },
+    },
 };
 
 pub fn main() !void {
     pin_config.pin_config.apply();
 
-    _ = uart_log.init();
+    const uart_writer = uart_log.init();
 
     std.log.info("Starting pinball controller!\r\n", .{});
 
@@ -147,7 +172,7 @@ pub fn main() !void {
                     if (prev_acc[0] != acc[0] or prev_acc[1] != acc[1] or prev_acc[2] != acc[2]) {
                         if (!nudged and dist > 400.0) {
                             nudged = true;
-                            std.log.debug("nudge!", .{});
+                            ms_log.debug("nudge! {any}", .{acc});
                             pins.led.set_level(100);
                         }
 
