@@ -86,12 +86,12 @@ pub const HardwareConfiguration = struct {
         std.log.info("Configuration valid. Pins taken:", .{});
         for (pin_conf, 0..) |maybe_entry, pin| {
             if (maybe_entry) |entry| {
-                std.log.info("  * GPIO{d}: {s}", .{pin, switch (entry.function) {
+                std.log.info("  * GPIO{d}: {s}", .{ pin, switch (entry.function) {
                     .button => "button",
                     .led => "led",
                     .plunger_1 => "plunger_1",
                     .plunger_2 => "plunger_2",
-               }});
+                } });
             }
         }
 

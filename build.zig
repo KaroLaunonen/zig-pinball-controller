@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
 
     const want_uf2 = b.option(bool, "uf2", "Build uf2 image") orelse false;
     if (want_uf2) {
-        mb.install_firmware(firmware, .{ });
+        mb.install_firmware(firmware, .{});
     } else {
         mb.install_firmware(firmware, .{ .format = .elf });
     }

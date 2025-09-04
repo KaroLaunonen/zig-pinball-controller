@@ -31,10 +31,10 @@ pub fn main() !void {
     defer writer.interface.flush() catch @panic("Flush failed");
 
     _ = try writer.interface.write(
-    \\// This file is auto-generated on demand.
-    \\
-    \\pub const KeymapEntry = enum(u8) {
-    \\
+        \\// This file is auto-generated on demand.
+        \\
+        \\pub const KeymapEntry = enum(u8) {
+        \\
     );
 
     var buf: [256]u8 = undefined;
