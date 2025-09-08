@@ -37,8 +37,8 @@
     // internet connectivity.
     .dependencies = .{
         .microzig = .{
-            .url = "git+https://github.com/KaroLaunonen/microzig.git#20159fa13ded6c8581644423f48a6810aa535b0d",
-            .hash = "microzig-0.14.3-D20YSeAN_QAVDJ9JrB5B8rrrgxLx-M43QGcmjR0DoO4Z",
+            .url = "git+https://github.com/KaroLaunonen/microzig.git#45bb41c6ffa3da1b45df2b044271b3f740794c14",
+            .hash = "microzig-0.15.0-D20YSWXu2gDYCBcmcZ6xpMfR1op7qXkqPbnaq70zg17I",
         },
     },
     .paths = .{
